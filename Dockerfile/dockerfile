@@ -1,7 +1,0 @@
-FROM openjdk:latest
-
-ENV HOME_APP /usr/src/app
-
-COPY target/*war $HOME_APP /usr/src/app
-
-  

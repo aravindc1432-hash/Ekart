@@ -1,4 +1,4 @@
-FROM FROM openjdk:latest
+FROM  openjdk:latest
 
 EXPOSE 8070
 

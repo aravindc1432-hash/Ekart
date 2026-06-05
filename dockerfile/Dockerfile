@@ -1,12 +1,8 @@
-FROM  openjdk:latest
+FROM eclipse-temurin:11-jdk
 
 EXPOSE 8070
 
-ENV HOME_APP /usr/src/app
+COPY target/*.jar app.jar
 
-COPY target/*.jar $HOME_APP /app.jar
-
-WORKDIR $HOME_APP
-
-ENTRYPOINT exec java -jar app.jar
+ENTRYPOINT ["java", "-jar", "app.jar"]
 

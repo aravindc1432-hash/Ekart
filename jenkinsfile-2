@@ -1,0 +1,112 @@
+pipeline {
+    agent any
+
+    tools {
+        maven 'maven3'
+        jdk 'jdk17'
+    }
+
+    environment {
+        SCANNER_HOME = tool 'sonar-scanner'
+    }
+
+    stages {
+
+        stage('Git Checkout') {
+            steps {
+                git branch: 'main',
+                    url: 'https://github.com/aravindc1432-hash/Ekart.git'
+            }
+        }
+
+        stage('Compile') {
+            steps {
+                sh 'mvn clean compile '
+            }
+        }
+
+        stage('Unit Tests') {
+            steps {
+                sh 'mvn test -DskipTests=true'
+            }
+        }
+
+        stage('SonarQube Analysis') {
+            steps {
+                withSonarQubeEnv('sonar') {
+                    sh '''
+                    $SCANNER_HOME/bin/sonar-scanner \
+                    -Dsonar.projectKey=EKART \
+                    -Dsonar.projectName=EKART \
+                    -Dsonar.sources=src/main/java \
+                    -Dsonar.java.binaries=target/classes
+                    '''
+                }
+            }
+        }
+
+        
+
+        stage('Build Application') {
+            steps {
+                sh 'mvn package -DskipTests=true'
+            }
+        }
+        
+        stage('OWASP DEPENDENCY CHECK') {
+            steps {
+                dependencyCheck additionalArguments: '--scan ./', odcInstallation: 'DC'
+                dependencyCheckPublisher pattern: '**/dependency-check-report.xml'
+            }
+        }
+
+        stage('Deploy Artifact to Nexus') {
+            steps {
+                withMaven(
+                    globalMavenSettingsConfig: 'global-maven',
+                    jdk: 'jdk17',
+                    maven: 'maven3'
+                ) {
+                    sh 'mvn deploy -DskipTests=true'
+                }
+            }
+        }
+        
+        stage('BUILD & TAG DOCKER IMAGE') {
+            steps {
+                script{
+                  withDockerRegistry(credentialsId: 'docker-cred') {
+                        sh 'docker build -t reddy177/ekart:latest -f dockerfile/Dockerfile .'
+                  }
+                }
+            }
+            
+        }
+        
+        stage('TRIVY SCAN') {
+            steps {
+                sh 'trivy image --scanners vuln --pkg-types os --timeout 10m reddy177/ekart:latest'
+            }
+        }
+        
+        stage('PUSH DOCKER IMAGE') {
+            steps {
+                script{
+                  withDockerRegistry(credentialsId: 'docker-cred') {
+                        sh 'docker push reddy177/ekart:latest'
+                  }
+                }
+            }
+            
+        }
+        
+        stage('k8s') {
+            steps {
+                withKubeConfig(caCertificate: '', clusterName: '', contextName: '', credentialsId: 'k8-token', namespace: 'webapps', restrictKubeConfigAccess: false, serverUrl: ' https://172.31.90.72:6443') {
+                    sh 'kubectl apply -f deploymentservice.yml -n webapps'
+                    sh 'kubectl get svc -n webapps'
+                }
+            }
+        }
+    }
+}
